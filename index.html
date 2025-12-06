@@ -66,7 +66,7 @@ if ('serviceWorker' in navigator) {
 </div>
 
 <div id="app">
-  <p>Type in English or click the keyboard. Suggestions and advanced prefix–suffix forms shown below.</p>
+  <p>Type in English or click the keyboard. Suggestions and prefix–suffix forms appear below.</p>
   <button onclick="toggleTheme()">Toggle Theme</button>
 
   <textarea id="text" placeholder="Type here or click the keyboard..."></textarea>
@@ -81,9 +81,9 @@ if ('serviceWorker' in navigator) {
 </div>
 
 <script>
-/* ===================================================================
-    LOAD DICTIONARIES
-=================================================================== */
+/* ================================================================
+   LOAD DICTIONARIES
+================================================================ */
 let DICT = [];
 let NEXT = {};
 
@@ -105,9 +105,17 @@ async function loadData() {
   }
 }
 
-/* ===================================================================
-    PHONETIC MAP (same as before)
-=================================================================== */
+/* ================================================================
+   PUNCTUATION CLEANING FUNCTION (NEW)
+================================================================ */
+function cleanAmharicWord(word) {
+  const punct = /[፡።፣፤፥፦፧]/g;
+  return word.replace(punct, "").trim();
+}
+
+/* ================================================================
+   PHONETIC MAP
+================================================================ */
 const MAP = {
   "tse":"ጸ","tsi":"ጺ","tso":"ጾ","ts":"ጽ","sh":"ሸ","ch":"ቸ","gn":"ኝ",
   "h":"ሀ","l":"ለ","m":"መ","s":"ሰ","z":"ዘ","t":"ተ","n":"ነ","k":"ከ","w":"ወ",
@@ -137,11 +145,10 @@ function phoneticToAmharic(text) {
   return out;
 }
 
-/* ===================================================================
-    NEW SECTION: PREFIXES + SUFFIXES + MORPHOLOGY ENGINE
-=================================================================== */
+/* ================================================================
+   MORPHOLOGY PREFIXES + SUFFIXES
+================================================================ */
 const PREFIXES = ["በ","ለ","የ","ከ","ብ","ስ"];
-
 const SUFFIXES = [
   "ን","ም","ህ","ዎች","ዎቹ","ዎችን","ዎችም","ዬ","ዎቹም","ዎቹሃም"
 ];
@@ -149,6 +156,7 @@ const SUFFIXES = [
 function applySuffix(root, suffix) {
   if (root.endsWith("ን") && suffix.startsWith("ዎ")) {
     const stem = root.slice(0, -1);
+
     if (suffix === "ዎች")   return stem + "ኖች";
     if (suffix === "ዎቹ")   return stem + "ኖቹ";
     if (suffix === "ዎችን")  return stem + "ኖችን";
@@ -161,8 +169,9 @@ function applySuffix(root, suffix) {
 
 function expandMorphology(root) {
   const out = new Set();
-  out.add(root);
+  root = cleanAmharicWord(root);
 
+  out.add(root);
   PREFIXES.forEach(p => out.add(p + root));
   SUFFIXES.forEach(s => out.add(applySuffix(root, s)));
 
@@ -173,11 +182,13 @@ function expandMorphology(root) {
   return Array.from(out);
 }
 
-/* ===================================================================
-    UPDATED SUGGESTION ENGINE WITH MORPHOLOGY
-=================================================================== */
+/* ================================================================
+   UPDATED SUGGESTIONS
+================================================================ */
 function getSuggestions(prefix) {
   if (!prefix || DICT.length === 0) return [];
+
+  prefix = cleanAmharicWord(prefix);
 
   const baseRoots = DICT
     .filter(e => e.root && e.root.startsWith(prefix))
@@ -193,20 +204,24 @@ function getSuggestions(prefix) {
   return Array.from(expanded).slice(0, 20);
 }
 
-/* ===================================================================
-    NEXT-WORD PREDICTION
-=================================================================== */
+/* ================================================================
+   PREDICTION
+================================================================ */
 function predictNext(word) {
+  word = cleanAmharicWord(word);
   if (!word || !NEXT[word]) return [];
   return NEXT[word].slice(0, 5).map(w => w[0]);
 }
 
-/* ===================================================================
-    UI UPDATE
-=================================================================== */
+/* ================================================================
+   UPDATE UI
+================================================================ */
 function updateUI() {
   const box = document.getElementById("text");
-  const raw = box.value.trim().split(/\s+/).pop() || "";
+  let raw = box.value.trim().split(/\s+/).pop() || "";
+
+  raw = cleanAmharicWord(raw);  
+
   const am = phoneticToAmharic(raw);
 
   const sug = getSuggestions(am);
@@ -216,9 +231,11 @@ function updateUI() {
 
 function applySuggestion(word) {
   const box = document.getElementById("text");
+
   let parts = box.value.trim().split(/\s+/);
   parts.pop();
   parts.push(word);
+
   box.value = parts.join(" ") + " ";
 
   const pred = predictNext(word);
@@ -232,9 +249,9 @@ function insertPred(word) {
   updateUI();
 }
 
-/* ===================================================================
-    KEYBOARD
-=================================================================== */
+/* ================================================================
+   KEYBOARD
+================================================================ */
 const rows = [
   ["q","w","e","r","t","y","u","i","o","p"],
   ["a","s","d","f","g","h","j","k","l"],
