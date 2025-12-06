@@ -1,520 +1,206 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Sawasew Amharic Keyboard – PWA Demo</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Sawasew Amharic Keyboard">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <title>Amharic Autocomplete Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(console.error);
-}
-</script>
-
-<style>
-  body {
-    font-family: system-ui, sans-serif;
-    margin: 20px;
-    max-width: 900px;
-    background: #ffffff;
-    color: #000;
-  }
-  body.dark { background: #111; color: #eee; }
-  textarea {
-    width: 100%;
-    font-size: 24px;
-    padding: 10px;
-    height: 100px;
-    margin-bottom: 12px;
-  }
-  .keyboard { margin-top: 12px; }
-  .row { display: flex; justify-content: center; }
-  .key {
-    padding: 14px 18px; margin: 3px;
-    background: #f2f2f2;
-    border: 1px solid #bbb;
-    border-radius: 6px;
-    font-size: 20px;
-    cursor: pointer; user-select: none;
-  }
-  body.dark .key { background: #333; border-color: #555; color: #eee; }
-
-  #suggestions li, #predictions li {
-    display: inline-block;
-    padding: 6px 12px;
-    margin: 4px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 22px;
-  }
-  #suggestions li {
-    background: #f4f4f4;
-    border: 1px solid #ccc;
-  }
-  #predictions li {
-    background: #dff4ff;
-    border: 1px solid #9ecfff;
-  }
-
-  #admin-panel {
-    margin-top: 20px;
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    background: #fafafa;
-  }
-  #admin-panel input {
-    font-size: 16px;
-    padding: 4px 6px;
-    margin-right: 6px;
-  }
-</style>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background: #f5f5f5;
+    }
+    h2 { margin-bottom: 10px; }
+    #container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    #inputBox {
+      width: 100%;
+      padding: 12px;
+      font-size: 20px;
+      border-radius: 8px;
+      border: 1px solid #aaa;
+    }
+    #suggestions {
+      margin-top: 10px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+    .suggestion-item {
+      padding: 12px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .suggestion-item:hover {
+      background: #eef;
+    }
+  </style>
 </head>
 
 <body>
-<h1>Sawasew Amharic Keyboard – PWA Demo</h1>
-
-<div id="loading">
-  <div id="spinner" style="
-    width:18px;height:18px;border-radius:50%;
-    border:3px solid #ccc;border-top-color:#007bff;
-    animation:spin 1s linear infinite;
-  "></div>
-  <span>Loading dictionaries…</span>
-</div>
-
-<div id="app" style="display:none;">
-  <button onclick="toggleTheme()">Toggle Theme</button>
-  <textarea id="text" placeholder="Type here..."></textarea>
-
-  <h3>Suggestions</h3>
-  <ul id="suggestions"></ul>
-
-  <h3>Predictions</h3>
-  <ul id="predictions"></ul>
-
-  <div id="keyboard"></div>
-
-  <div id="admin-panel">
-    <h3>Verified Word Admin</h3>
-    <input id="verifiedWordInput" placeholder="Verified word…" />
-    <input id="verifiedFreqInput" type="number" value="10" />
-    <button onclick="addVerifiedWordFromUI()">Add</button>
-    <button onclick="downloadVerifiedJSON()">Download verified_words.json</button>
-    <button onclick="mergeDictionaries()">Merge & Download mobile_dict.json</button>
-  </div>
+<div id="container">
+  <h2>Amharic Auto-Suggestion</h2>
+  <input id="inputBox" type="text" placeholder="Type: kt, ktm, bet, set…">
+  <div id="suggestions"></div>
 </div>
 
 <script>
-/* ============================================================
-   1. GLOBAL VARIABLES
-============================================================ */
-let DICT = [];
-let NEXT = {};
-let LEARNED = {};
-let VERIFIED = {};
-let dictionary = [];
-
-/* ============================================================
-   2. LOAD DICTIONARIES
-============================================================ */
-async function loadData() {
-  try {
-    const [dictRes, nextRes] = await Promise.all([
-      fetch("mobile_dict.json"),
-      fetch("next_word_model.json")
-    ]);
-    DICT = await dictRes.json();
-    NEXT = await nextRes.json();
-  } catch (e) {
-    console.error("Error loading main dictionaries:", e);
-  }
-
-  // Load verified_words.json  
-  try {
-    const vRes = await fetch("verified_words.json");
-    if (vRes.ok) VERIFIED = await vRes.json();
-    else VERIFIED = {};
-  } catch (e) {
-    console.warn("verified_words.json not found");
-    VERIFIED = {};
-  }
-
-  // Load learned dictionary  
-  try {
-    LEARNED = JSON.parse(localStorage.getItem("learned_dict") || "{}");
-  } catch (e) {
-    LEARNED = {};
-  }
-
-  document.getElementById("loading").style.display = "none";
-  document.getElementById("app").style.display = "block";
-
-  buildKeyboard();
-  updateUI();
-}
-
-/* ============================================================
-   3. CLEAN AMHARIC WORDS
-============================================================ */
-function cleanAmharicWord(word) {
-  const punct = /[፡።፣፤፥፦፧]/g;
-  return word.replace(punct, "").trim();
-}
-
-/* ============================================================
-   4. LEARNING DICTIONARY — rememberWord()
-============================================================ */
-function rememberWord(word) {
-  word = cleanAmharicWord(word);
-  if (!word) return;
-
-  // Only store Amharic script (not English)
-  if (/^[A-Za-z]+$/.test(word)) return;
-
-  LEARNED[word] = (LEARNED[word] || 0) + 1;
-  localStorage.setItem("learned_dict", JSON.stringify(LEARNED));
-}
-
-/* ============================================================
-   5. PHONETIC MAP
-============================================================ */
-const MAP = {
-  "tse":"ጸ","tsi":"ጺ","tso":"ጾ","ts":"ጽ","sh":"ሸ","ch":"ቸ","gn":"ኝ",
-  "h":"ሀ","l":"ለ","m":"መ","s":"ሰ","z":"ዘ","t":"ተ","n":"ነ","k":"ከ","w":"ወ",
-  "b":"በ","f":"ፈ","p":"ፐ","g":"ገ","d":"ደ","j":"ጀ","r":"ረ","q":"ቀ","y":"የ",
-  "x":"ሸ","c":"ቸ","a":"አ","e":"እ","i":"ኢ","u":"ኡ","o":"ኦ"
-};
-
-function phoneticToAmharic(text) {
-  text = text.toLowerCase();
-  let out = "", i = 0;
-  const keys = Object.keys(MAP).sort((a,b)=>b.length - a.length);
-  while (i < text.length) {
-    let matched = false;
-    for (const k of keys) {
-      if (text.startsWith(k, i)) {
-        out += MAP[k];
-        i += k.length;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
-      if (text[i] === " ") out += " ";
-      i++;
-    }
-  }
-  return out;
-}
-
-/* ============================================================
-   6. MORPHOLOGY ENGINE — prefixes & suffixes
-============================================================ */
-const PREFIXES = ["በ","ለ","የ","ከ","ብ","ስ"];
-const SUFFIXES = [
-  "ን","ም","ህ","ዎች","ዎቹ",
-  "ዎችን","ዎችም","ዬ","ዎቹም","ዎቹሃም"
-];
-
-function applySuffix(root, suffix) {
-  root = cleanAmharicWord(root);
-
-  // Special plural rule for: ቀን → ቀኖች
-  if (root.endsWith("ን") && suffix.startsWith("ዎ")) {
-    const stem = root.slice(0, -1);
-
-    if (suffix === "ዎች")    return stem + "ኖች";
-    if (suffix === "ዎቹ")    return stem + "ኖቹ";
-    if (suffix === "ዎችን")   return stem + "ኖችን";
-    if (suffix === "ዎችም")   return stem + "ኖችም";
-    if (suffix === "ዎቹም")   return stem + "ኖቹም";
-    if (suffix === "ዎቹሃም") return stem + "ኖቹሃም";
-  }
-  return root + suffix;
-}
-
-function expandMorphology(root) {
-  const out = new Set();
-  root = cleanAmharicWord(root);
-  if (!root) return [];
-
-  out.add(root);
-
-  PREFIXES.forEach(p => out.add(p + root));
-  SUFFIXES.forEach(s => out.add(applySuffix(root, s)));
-
-  PREFIXES.forEach(p => {
-    SUFFIXES.forEach(s => out.add(p + applySuffix(root, s)));
-  });
-
-  return Array.from(out);
-}
-// Get all forms for a given root
-function getFormsForRoot(root) {
-  return rootFormsMap[root] || [];
-}
-
-// Find roots starting with prefix
-function findMatchingRoots(prefix) {
-  return Object.keys(rootFormsMap)
-    .filter(root => root.startsWith(prefix));
-}
+document.addEventListener("DOMContentLoaded", () => {
 
   // ----------------------------
-// Root → Forms map
-// ----------------------------
-let rootFormsMap = {};
+  // 1. Transliteration Mapping
+  // ----------------------------
+  const latinToAmharic = {
+    "a": "አ", "A": "አ",
+    "b": "በ", "B": "በ",
+    "f": "ፈ", "F": "ፈ",
+    "h": "ሀ", "H": "ሀ",
+    "k": "ከ", "K": "ከ",
+    "l": "ለ", "L": "ለ",
+    "m": "መ", "M": "መ",
+    "n": "ነ", "N": "ነ",
+    "t": "ተ", "T": "ተ",
+    "s": "ሰ", "S": "ሰ",
+    "w": "ወ", "W": "ወ",
+    "r": "ረ", "R": "ረ"
+  };
 
-async function loadRootForms() {
-  try {
-    const res = await fetch("root_forms_map.json?cache=" + Date.now());
-    rootFormsMap = await res.json();
-    console.log("Root forms map loaded:", Object.keys(rootFormsMap).length, "roots");
-  } catch (e) {
-    console.error("Error loading root forms map:", e);
+  // Convert latin "ktm" → "ከተመ"
+  function transliterate(str) {
+    let am = "";
+    for (let ch of str) {
+      if (latinToAmharic[ch]) {
+        am += latinToAmharic[ch];
+      }
+    }
+    return am;
   }
-}
 
-loadRootForms();
+  // ----------------------------
+  // 2. Smart Prefix Adjuster
+  // ----------------------------
+  function smartPrefix(prefix, roots) {
+    if (roots.some(r => r.startsWith(prefix))) return prefix;
 
+    for (let i = prefix.length; i > 0; i--) {
+      const shortened = prefix.substring(0, i);
+      if (roots.some(r => r.startsWith(shortened))) return shortened;
+    }
+    return prefix;
+  }
 
-/* ============================================================
-   7. SUGGESTIONS ENGINE (dictionary + verified + learned)
-============================================================ */
-function getSuggestions(input) {
-  const raw = transliterate(input);
+  // ----------------------------
+  // 3. Load Dictionaries
+  // ----------------------------
+  let dictionary = [];
+  let rootFormsMap = {};
 
-  // Use roots map keys for smart prefix, not full dictionary
-  const rootsList = Object.keys(rootFormsMap);
-  const prefix = smartPrefix(raw, rootsList);
+  async function loadDictionary() {
+    try {
+      const res = await fetch("mobile_dict.json?cache=" + Date.now());
+      dictionary = await res.json();
+      if (dictionary.words) dictionary = dictionary.words;
+      console.log("Dictionary loaded:", dictionary.length);
+    } catch (e) {
+      console.error("Failed to load dictionary:", e);
+    }
+  }
 
-  if (!prefix) return [];
+  async function loadRootForms() {
+    try {
+      const res = await fetch("root_forms_map.json?cache=" + Date.now());
+      rootFormsMap = await res.json();
+      console.log("Root-Forms Map Loaded:", Object.keys(rootFormsMap).length);
+    } catch (e) {
+      console.error("Failed to load Root-Forms map:", e);
+    }
+  }
 
-  let suggestions = [];
+  loadDictionary();
+  loadRootForms();
 
-  // 1️⃣ Find roots that start with that prefix
-  const roots = findMatchingRoots(prefix);
+  // ----------------------------
+  // 4. Root → Forms Helpers
+  // ----------------------------
+  function getFormsForRoot(root) {
+    return rootFormsMap[root] || [];
+  }
 
-  // 2️⃣ For each root, add the root + all its forms
-  roots.forEach(root => {
-    suggestions.push(root); // root itself
-    suggestions.push(...getFormsForRoot(root)); // all derived forms
-  });
+  function findMatchingRoots(prefix) {
+    return Object.keys(rootFormsMap)
+      .filter(root => root.startsWith(prefix));
+  }
 
-  // 3️⃣ Remove duplicates & limit to 25
-  return [...new Set(suggestions)].slice(0, 25);
-}
+  // ----------------------------
+  // 5. Main Suggestion Function
+  // ----------------------------
+  function getSuggestions(input) {
+    const raw = transliterate(input);
+    const rootsList = Object.keys(rootFormsMap);
+    const prefix = smartPrefix(raw, rootsList);
 
-// function getSuggestions(prefix) 
-// {
-//   if (!prefix) return [];
+    if (!prefix) return [];
 
-//   prefix = cleanAmharicWord(prefix);
+    let suggestions = [];
+    const roots = findMatchingRoots(prefix);
 
-//   let combined = [...DICT];
-
-//   // Add learned words
-//   for (let w in LEARNED) {
-//     combined.push({ root: w, freq: LEARNED[w], forms: [w] });
-//   }
-
-//   // Add verified words (very high weight)
-//   for (let w in VERIFIED) {
-//     combined.push({ root: w, freq: VERIFIED[w] + 1000, forms: [w] });
-//   }
-
-//   const baseRoots = combined
-//     .filter(e => e.root && e.root.startsWith(prefix))
-//     .sort((a,b)=> (b.freq||0)-(a.freq||0))
-//     .slice(0, 5);
-
-//   const expanded = new Set();
-//   baseRoots.forEach(entry => {
-//     expandMorphology(entry.root).forEach(v => expanded.add(v));
-//   });
-
-//   return Array.from(expanded).slice(0, 20);
-// }
-
-/* ============================================================
-   8. NEXT WORD PREDICTION
-============================================================ */
-function predictNext(word) {
-  word = cleanAmharicWord(word);
-  if (!word || !NEXT[word]) return [];
-  return NEXT[word].slice(0, 5).map(w => w[0]);
-}
-
-/* ============================================================
-   9. UI UPDATE FUNCTIONS
-============================================================ */
-function updateUI() {
-  const box = document.getElementById("text");
-  let raw = box.value.trim().split(/\s+/).pop() || "";
-
-  raw = cleanAmharicWord(raw);
-  const am = phoneticToAmharic(raw);
-
-  const sug = getSuggestions(am);
-  document.getElementById("suggestions").innerHTML =
-    sug.map(w => `<li onclick="applySuggestion('${w}')">${w}</li>`).join("");
-}
-
-function applySuggestion(word) {
-  const box = document.getElementById("text");
-  let parts = box.value.trim().split(/\s+/);
-  parts.pop();
-  parts.push(word);
-  box.value = parts.join(" ") + " ";
-
-  rememberWord(word);
-
-  const pred = predictNext(word);
-  document.getElementById("predictions").innerHTML =
-    pred.map(w => `<li onclick="insertPred('${w}')">${w}</li>`).join("");
-}
-
-function insertPred(word) {
-  const box = document.getElementById("text");
-  box.value += word + " ";
-  rememberWord(word);
-  updateUI();
-}
-
-/* ============================================================
-   10. KEYBOARD LOGIC
-============================================================ */
-const rows = [
-  ["q","w","e","r","t","y","u","i","o","p"],
-  ["a","s","d","f","g","h","j","k","l"],
-  ["z","x","c","v","b","n","m","⌫","␣","?"]
-];
-
-function buildKeyboard() {
-  const kb = document.getElementById("keyboard");
-  kb.innerHTML = "";
-
-  rows.forEach(row => {
-    const div = document.createElement("div");
-    div.className = "row";
-
-    row.forEach(k => {
-      const key = document.createElement("div");
-      key.className = "key";
-      key.textContent = k;
-      key.onclick = () => handleKey(k);
-      div.appendChild(key);
+    roots.forEach(root => {
+      suggestions.push(root);
+      suggestions.push(...getFormsForRoot(root));
     });
 
-    kb.appendChild(div);
+    return [...new Set(suggestions)].slice(0, 25);
+  }
+
+  // ----------------------------
+  // 6. UI Interaction
+  // ----------------------------
+  const inputBox = document.getElementById("inputBox");
+  const suggestionsBox = document.getElementById("suggestions");
+
+  inputBox.addEventListener("input", () => {
+    const val = inputBox.value.trim();
+    if (!val) {
+      suggestionsBox.style.display = "none";
+      return;
+    }
+
+    const results = getSuggestions(val);
+
+    if (results.length === 0) {
+      suggestionsBox.style.display = "none";
+      return;
+    }
+
+    renderSuggestions(results);
   });
-}
+  function renderSuggestions(list) {
+    suggestionsBox.innerHTML = "";
+    suggestionsBox.style.display = "block";
 
-function handleKey(k) {
-  const box = document.getElementById("text");
-
-  if (k === "⌫") {
-    box.value = box.value.slice(0, -1);
-  } else if (k === "␣") {
-    let last = box.value.trim().split(/\s+/).pop() || "";
-    last = cleanAmharicWord(phoneticToAmharic(last));
-    rememberWord(last);
-    box.value += " ";
-  } else {
-    box.value += k;
+    list.forEach(word => {
+      const div = document.createElement("div");
+      div.className = "suggestion-item";
+      div.textContent = word;
+      div.onclick = () => {
+        inputBox.value = word;
+        suggestionsBox.style.display = "none";
+      };
+      suggestionsBox.appendChild(div);
+    });
   }
 
-  updateUI();
-}
-
-/* ============================================================
-   11. VERIFIED WORDS ADMIN PANEL
-============================================================ */
-function addVerifiedWordFromUI() {
-  const wordInput = document.getElementById("verifiedWordInput");
-  const freqInput = document.getElementById("verifiedFreqInput");
-
-  let w = cleanAmharicWord(wordInput.value);
-  let f = parseInt(freqInput.value);
-
-  if (!w) return alert("Enter a valid verified word.");
-  if (!f || f < 1) f = 1;
-
-  VERIFIED[w] = f;
-  alert("Verified word added. Download JSON to save it.");
-
-  wordInput.value = "";
-}
-
-function downloadVerifiedJSON() {
-  const dataStr = JSON.stringify(VERIFIED, null, 2);
-  downloadFile(dataStr, "verified_words.json");
-}
-
-/* ============================================================
-   12. MERGE + DEDUP DICTIONARIES (mobile_dict.json OUTPUT)
-============================================================ */
-async function mergeDictionaries() {
-  let mainDict = [];
-
-  try {
-    const res = await fetch("mobile_dict.json");
-    if (res.ok) mainDict = await res.json();
-  } catch (e) {
-    console.error("Error loading mobile_dict.json");
-  }
-
-  const roots = new Set(mainDict.map(e => e.root));
-
-  for (let w in VERIFIED) roots.add(w);
-  for (let w in LEARNED) roots.add(w);
-
-  const merged = Array.from(roots).map(r => ({ root: r, freq: 1 }));
-  merged.sort((a,b)=> a.root.localeCompare(b.root));
-
-  const dataStr = JSON.stringify(merged, null, 2);
-  downloadFile(dataStr, "mobile_dict.json");
-
-  alert("Merged dictionary downloaded. Replace your existing mobile_dict.json.");
-}
-
-function downloadFile(dataStr, filename) {
-  const blob = new Blob([dataStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  URL.revokeObjectURL(url);
-}
-
-/* ============================================================
-   13. TOGGLE THEME
-============================================================ */
-function toggleTheme() {
-  document.body.classList.toggle("dark");
-}
-
-/* ============================================================
-   14. START APP
-============================================================ */
-loadData();
+});
 </script>
-
 </body>
 </html>
-
-
-
-
-  
