@@ -118,6 +118,7 @@ let DICT = [];
 let NEXT = {};
 let LEARNED = {};
 let VERIFIED = {};
+let dictionary = [];
 
 /* ============================================================
    2. LOAD DICTIONARIES
@@ -254,39 +255,92 @@ function expandMorphology(root) {
 
   return Array.from(out);
 }
+// Get all forms for a given root
+function getFormsForRoot(root) {
+  return rootFormsMap[root] || [];
+}
+
+// Find roots starting with prefix
+function findMatchingRoots(prefix) {
+  return Object.keys(rootFormsMap)
+    .filter(root => root.startsWith(prefix));
+}
+
+  // ----------------------------
+// Root → Forms map
+// ----------------------------
+let rootFormsMap = {};
+
+async function loadRootForms() {
+  try {
+    const res = await fetch("root_forms_map.json?cache=" + Date.now());
+    rootFormsMap = await res.json();
+    console.log("Root forms map loaded:", Object.keys(rootFormsMap).length, "roots");
+  } catch (e) {
+    console.error("Error loading root forms map:", e);
+  }
+}
+
+loadRootForms();
+
 
 /* ============================================================
    7. SUGGESTIONS ENGINE (dictionary + verified + learned)
 ============================================================ */
-function getSuggestions(prefix) {
+function getSuggestions(input) {
+  const raw = transliterate(input);
+
+  // Use roots map keys for smart prefix, not full dictionary
+  const rootsList = Object.keys(rootFormsMap);
+  const prefix = smartPrefix(raw, rootsList);
+
   if (!prefix) return [];
 
-  prefix = cleanAmharicWord(prefix);
+  let suggestions = [];
 
-  let combined = [...DICT];
+  // 1️⃣ Find roots that start with that prefix
+  const roots = findMatchingRoots(prefix);
 
-  // Add learned words
-  for (let w in LEARNED) {
-    combined.push({ root: w, freq: LEARNED[w], forms: [w] });
-  }
-
-  // Add verified words (very high weight)
-  for (let w in VERIFIED) {
-    combined.push({ root: w, freq: VERIFIED[w] + 1000, forms: [w] });
-  }
-
-  const baseRoots = combined
-    .filter(e => e.root && e.root.startsWith(prefix))
-    .sort((a,b)=> (b.freq||0)-(a.freq||0))
-    .slice(0, 5);
-
-  const expanded = new Set();
-  baseRoots.forEach(entry => {
-    expandMorphology(entry.root).forEach(v => expanded.add(v));
+  // 2️⃣ For each root, add the root + all its forms
+  roots.forEach(root => {
+    suggestions.push(root); // root itself
+    suggestions.push(...getFormsForRoot(root)); // all derived forms
   });
 
-  return Array.from(expanded).slice(0, 20);
+  // 3️⃣ Remove duplicates & limit to 25
+  return [...new Set(suggestions)].slice(0, 25);
 }
+
+// function getSuggestions(prefix) 
+// {
+//   if (!prefix) return [];
+
+//   prefix = cleanAmharicWord(prefix);
+
+//   let combined = [...DICT];
+
+//   // Add learned words
+//   for (let w in LEARNED) {
+//     combined.push({ root: w, freq: LEARNED[w], forms: [w] });
+//   }
+
+//   // Add verified words (very high weight)
+//   for (let w in VERIFIED) {
+//     combined.push({ root: w, freq: VERIFIED[w] + 1000, forms: [w] });
+//   }
+
+//   const baseRoots = combined
+//     .filter(e => e.root && e.root.startsWith(prefix))
+//     .sort((a,b)=> (b.freq||0)-(a.freq||0))
+//     .slice(0, 5);
+
+//   const expanded = new Set();
+//   baseRoots.forEach(entry => {
+//     expandMorphology(entry.root).forEach(v => expanded.add(v));
+//   });
+
+//   return Array.from(expanded).slice(0, 20);
+// }
 
 /* ============================================================
    8. NEXT WORD PREDICTION
