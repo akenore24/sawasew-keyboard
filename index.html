@@ -77,7 +77,7 @@ const latinToAmharic = {
   "y": "የ", "Y": "የ"
 };
 
-// Convert latin "ktm" → "ከተመ"
+// Convert "ktm" → "ከተመ"
 function transliterate(str) {
   let am = "";
   for (let ch of str) {
@@ -144,7 +144,7 @@ function getSuggestions(input) {
 }
 
 // ----------------------------
-// 5. Apply Suggestion to Sentence
+// 5. Sentence-safe word insertion
 // ----------------------------
 function applySuggestion(fullText, selectedWord) {
   let parts = fullText.trimEnd().split(" ");
