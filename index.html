@@ -31,19 +31,16 @@ if ('serviceWorker' in navigator) {
     padding: 10px;
     height: 100px;
     margin-bottom: 12px;
-    box-sizing: border-box;
   }
   .keyboard { margin-top: 12px; }
   .row { display: flex; justify-content: center; }
   .key {
-    padding: 14px 18px;
-    margin: 3px;
+    padding: 14px 18px; margin: 3px;
     background: #f2f2f2;
     border: 1px solid #bbb;
     border-radius: 6px;
     font-size: 20px;
-    cursor: pointer;
-    user-select: none;
+    cursor: pointer; user-select: none;
   }
   body.dark .key { background: #333; border-color: #555; color: #eee; }
 
@@ -64,98 +61,67 @@ if ('serviceWorker' in navigator) {
     border: 1px solid #9ecfff;
   }
 
-  #loading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 10px 0;
-  }
-  #spinner {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 3px solid #ccc;
-    border-top-color: #007bff;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin {
-    from { transform: rotate(0deg);} to { transform: rotate(360deg);}
-  }
-  #app { display: none; }
-
-  /* Simple admin panel styling */
   #admin-panel {
     margin-top: 20px;
     padding: 10px;
     border-radius: 8px;
     border: 1px solid #ccc;
     background: #fafafa;
-    font-size: 14px;
   }
   #admin-panel input {
     font-size: 16px;
     padding: 4px 6px;
-    margin-right: 4px;
-  }
-  #admin-panel button {
-    font-size: 14px;
-    padding: 4px 8px;
-    margin-right: 4px;
+    margin-right: 6px;
   }
 </style>
 </head>
 
-<body class="light">
+<body>
 <h1>Sawasew Amharic Keyboard – PWA Demo</h1>
 
 <div id="loading">
-  <div id="spinner"></div>
-  <div>Loading Amharic dictionary…</div>
+  <div id="spinner" style="
+    width:18px;height:18px;border-radius:50%;
+    border:3px solid #ccc;border-top-color:#007bff;
+    animation:spin 1s linear infinite;
+  "></div>
+  <span>Loading dictionaries…</span>
 </div>
 
-<div id="app">
-  <p>
-    Type in English or click the keyboard. Suggestions use Bible data + verified words + a learning dictionary
-    that grows as you type.
-  </p>
+<div id="app" style="display:none;">
   <button onclick="toggleTheme()">Toggle Theme</button>
+  <textarea id="text" placeholder="Type here..."></textarea>
 
-  <textarea id="text" placeholder="Type here or click the keyboard..."></textarea>
-
-  <h3>Suggestions:</h3>
+  <h3>Suggestions</h3>
   <ul id="suggestions"></ul>
 
-  <h3>Predictions:</h3>
+  <h3>Predictions</h3>
   <ul id="predictions"></ul>
 
-  <div id="keyboard" class="keyboard"></div>
+  <div id="keyboard"></div>
 
-  <!-- Admin panel for VERIFIED words (local helper for you) -->
   <div id="admin-panel">
-    <h3>Verified Words Admin (local helper)</h3>
-    <p style="margin:4px 0;">
-      Type a verified Amharic root word and frequency, then click "Add". When you’re happy with your list,
-      click "Download JSON" and replace <code>verified_words.json</code> in your project.
-    </p>
-    <input id="verifiedWordInput" placeholder="እዚህ ቃል ጻፍ" />
-    <input id="verifiedFreqInput" type="number" value="10" style="width:70px;" />
-    <button onclick="addVerifiedWordFromUI()">Add verified word</button>
-    <button onclick="downloadVerifiedJSON()">Download JSON</button>
+    <h3>Verified Word Admin</h3>
+    <input id="verifiedWordInput" placeholder="Verified word…" />
+    <input id="verifiedFreqInput" type="number" value="10" />
+    <button onclick="addVerifiedWordFromUI()">Add</button>
+    <button onclick="downloadVerifiedJSON()">Download verified_words.json</button>
+    <button onclick="mergeDictionaries()">Merge & Download mobile_dict.json</button>
   </div>
 </div>
 
 <script>
-/* ================================================================
-   GLOBAL DATA
-================================================================ */
-let DICT = [];        // main Bible dictionary
-let NEXT = {};        // next-word model
-let LEARNED = {};     // user-learned words (localStorage)
-let VERIFIED = {};    // verified words from verified_words.json (+ admin additions)
+/* ============================================================
+   1. GLOBAL VARIABLES
+============================================================ */
+let DICT = [];
+let NEXT = {};
+let LEARNED = {};
+let VERIFIED = {};
 
-/* ================================================================
-   LOAD DICTIONARIES
-================================================================ */
+/* ============================================================
+   2. LOAD DICTIONARIES
+============================================================ */
 async function loadData() {
   try {
     const [dictRes, nextRes] = await Promise.all([
@@ -168,27 +134,23 @@ async function loadData() {
     console.error("Error loading main dictionaries:", e);
   }
 
-  // Load verified words file (if present)
+  // Load verified_words.json  
   try {
     const vRes = await fetch("verified_words.json");
-    if (vRes.ok) {
-      VERIFIED = await vRes.json();
-    } else {
-      VERIFIED = {};
-    }
+    if (vRes.ok) VERIFIED = await vRes.json();
+    else VERIFIED = {};
   } catch (e) {
-    console.warn("verified_words.json not loaded:", e);
+    console.warn("verified_words.json not found");
     VERIFIED = {};
   }
 
-  // Load user-learned dictionary from localStorage
+  // Load learned dictionary  
   try {
     LEARNED = JSON.parse(localStorage.getItem("learned_dict") || "{}");
   } catch (e) {
     LEARNED = {};
   }
 
-  // Show app
   document.getElementById("loading").style.display = "none";
   document.getElementById("app").style.display = "block";
 
@@ -196,32 +158,31 @@ async function loadData() {
   updateUI();
 }
 
-/* ================================================================
-   PUNCTUATION CLEANING
-================================================================ */
+/* ============================================================
+   3. CLEAN AMHARIC WORDS
+============================================================ */
 function cleanAmharicWord(word) {
   const punct = /[፡።፣፤፥፦፧]/g;
   return word.replace(punct, "").trim();
 }
 
-/* ================================================================
-   LEARNING DICTIONARY
-================================================================ */
-// Easy name as requested: rememberWord()
+/* ============================================================
+   4. LEARNING DICTIONARY — rememberWord()
+============================================================ */
 function rememberWord(word) {
   word = cleanAmharicWord(word);
   if (!word) return;
 
-  // Only store Amharic (skip pure Latin)
+  // Only store Amharic script (not English)
   if (/^[A-Za-z]+$/.test(word)) return;
 
   LEARNED[word] = (LEARNED[word] || 0) + 1;
   localStorage.setItem("learned_dict", JSON.stringify(LEARNED));
 }
 
-/* ================================================================
-   PHONETIC MAP
-================================================================ */
+/* ============================================================
+   5. PHONETIC MAP
+============================================================ */
 const MAP = {
   "tse":"ጸ","tsi":"ጺ","tso":"ጾ","ts":"ጽ","sh":"ሸ","ch":"ቸ","gn":"ኝ",
   "h":"ሀ","l":"ለ","m":"መ","s":"ሰ","z":"ዘ","t":"ተ","n":"ነ","k":"ከ","w":"ወ",
@@ -251,19 +212,22 @@ function phoneticToAmharic(text) {
   return out;
 }
 
-/* ================================================================
-   MORPHOLOGY: PREFIXES + SUFFIXES
-================================================================ */
+/* ============================================================
+   6. MORPHOLOGY ENGINE — prefixes & suffixes
+============================================================ */
 const PREFIXES = ["በ","ለ","የ","ከ","ብ","ስ"];
 const SUFFIXES = [
-  "ን","ም","ህ","ዎች","ዎቹ","ዎችን","ዎችም","ዬ","ዎቹም","ዎቹሃም"
+  "ን","ም","ህ","ዎች","ዎቹ",
+  "ዎችን","ዎችም","ዬ","ዎቹም","ዎቹሃም"
 ];
 
 function applySuffix(root, suffix) {
   root = cleanAmharicWord(root);
 
+  // Special plural rule for: ቀን → ቀኖች
   if (root.endsWith("ን") && suffix.startsWith("ዎ")) {
     const stem = root.slice(0, -1);
+
     if (suffix === "ዎች")    return stem + "ኖች";
     if (suffix === "ዎቹ")    return stem + "ኖቹ";
     if (suffix === "ዎችን")   return stem + "ኖችን";
@@ -291,39 +255,32 @@ function expandMorphology(root) {
   return Array.from(out);
 }
 
-/* ================================================================
-   SUGGESTIONS (Base + Learned + Verified + Morphology)
-================================================================ */
+/* ============================================================
+   7. SUGGESTIONS ENGINE (dictionary + verified + learned)
+============================================================ */
 function getSuggestions(prefix) {
   if (!prefix) return [];
 
   prefix = cleanAmharicWord(prefix);
 
-  // Combine main dictionary + learned + verified
   let combined = [...DICT];
 
-  // Add learned words (user-based)
+  // Add learned words
   for (let w in LEARNED) {
     combined.push({ root: w, freq: LEARNED[w], forms: [w] });
   }
 
-  // Add verified words (stronger weight)
+  // Add verified words (very high weight)
   for (let w in VERIFIED) {
-    combined.push({
-      root: w,
-      freq: (VERIFIED[w] || 1) + 1000, // boost verified words
-      forms: [w]
-    });
+    combined.push({ root: w, freq: VERIFIED[w] + 1000, forms: [w] });
   }
 
-  // Find base roots that start with the prefix
   const baseRoots = combined
     .filter(e => e.root && e.root.startsWith(prefix))
-    .sort((a,b)=> (b.freq||0) - (a.freq||0))
+    .sort((a,b)=> (b.freq||0)-(a.freq||0))
     .slice(0, 5);
 
   const expanded = new Set();
-
   baseRoots.forEach(entry => {
     expandMorphology(entry.root).forEach(v => expanded.add(v));
   });
@@ -331,18 +288,18 @@ function getSuggestions(prefix) {
   return Array.from(expanded).slice(0, 20);
 }
 
-/* ================================================================
-   PREDICTION
-================================================================ */
+/* ============================================================
+   8. NEXT WORD PREDICTION
+============================================================ */
 function predictNext(word) {
   word = cleanAmharicWord(word);
   if (!word || !NEXT[word]) return [];
   return NEXT[word].slice(0, 5).map(w => w[0]);
 }
 
-/* ================================================================
-   UI UPDATE
-================================================================ */
+/* ============================================================
+   9. UI UPDATE FUNCTIONS
+============================================================ */
 function updateUI() {
   const box = document.getElementById("text");
   let raw = box.value.trim().split(/\s+/).pop() || "";
@@ -353,8 +310,6 @@ function updateUI() {
   const sug = getSuggestions(am);
   document.getElementById("suggestions").innerHTML =
     sug.map(w => `<li onclick="applySuggestion('${w}')">${w}</li>`).join("");
-
-  // (Predictions updated only when a suggestion or word is committed)
 }
 
 function applySuggestion(word) {
@@ -378,9 +333,9 @@ function insertPred(word) {
   updateUI();
 }
 
-/* ================================================================
-   KEYBOARD
-================================================================ */
+/* ============================================================
+   10. KEYBOARD LOGIC
+============================================================ */
 const rows = [
   ["q","w","e","r","t","y","u","i","o","p"],
   ["a","s","d","f","g","h","j","k","l"],
@@ -390,9 +345,11 @@ const rows = [
 function buildKeyboard() {
   const kb = document.getElementById("keyboard");
   kb.innerHTML = "";
+
   rows.forEach(row => {
     const div = document.createElement("div");
     div.className = "row";
+
     row.forEach(k => {
       const key = document.createElement("div");
       key.className = "key";
@@ -400,6 +357,7 @@ function buildKeyboard() {
       key.onclick = () => handleKey(k);
       div.appendChild(key);
     });
+
     kb.appendChild(div);
   });
 }
@@ -417,55 +375,92 @@ function handleKey(k) {
   } else {
     box.value += k;
   }
+
   updateUI();
 }
 
-/* ================================================================
-   VERIFIED WORDS ADMIN UI
-================================================================ */
+/* ============================================================
+   11. VERIFIED WORDS ADMIN PANEL
+============================================================ */
 function addVerifiedWordFromUI() {
   const wordInput = document.getElementById("verifiedWordInput");
   const freqInput = document.getElementById("verifiedFreqInput");
 
   let w = cleanAmharicWord(wordInput.value);
-  let f = parseInt(freqInput.value, 10);
-  if (!w) {
-    alert("Please enter a valid Amharic word.");
-    return;
-  }
+  let f = parseInt(freqInput.value);
+
+  if (!w) return alert("Enter a valid verified word.");
   if (!f || f < 1) f = 1;
 
   VERIFIED[w] = f;
-  alert("Verified word added in memory. Click 'Download JSON' to save it to a file.");
+  alert("Verified word added. Download JSON to save it.");
 
   wordInput.value = "";
 }
 
 function downloadVerifiedJSON() {
   const dataStr = JSON.stringify(VERIFIED, null, 2);
+  downloadFile(dataStr, "verified_words.json");
+}
+
+/* ============================================================
+   12. MERGE + DEDUP DICTIONARIES (mobile_dict.json OUTPUT)
+============================================================ */
+async function mergeDictionaries() {
+  let mainDict = [];
+
+  try {
+    const res = await fetch("mobile_dict.json");
+    if (res.ok) mainDict = await res.json();
+  } catch (e) {
+    console.error("Error loading mobile_dict.json");
+  }
+
+  const roots = new Set(mainDict.map(e => e.root));
+
+  for (let w in VERIFIED) roots.add(w);
+  for (let w in LEARNED) roots.add(w);
+
+  const merged = Array.from(roots).map(r => ({ root: r, freq: 1 }));
+  merged.sort((a,b)=> a.root.localeCompare(b.root));
+
+  const dataStr = JSON.stringify(merged, null, 2);
+  downloadFile(dataStr, "mobile_dict.json");
+
+  alert("Merged dictionary downloaded. Replace your existing mobile_dict.json.");
+}
+
+function downloadFile(dataStr, filename) {
   const blob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = "verified_words.json";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+
   URL.revokeObjectURL(url);
 }
 
-/* ================================================================
-   THEME
-================================================================ */
+/* ============================================================
+   13. TOGGLE THEME
+============================================================ */
 function toggleTheme() {
   document.body.classList.toggle("dark");
 }
 
-/* ================================================================
-   START
-================================================================ */
+/* ============================================================
+   14. START APP
+============================================================ */
 loadData();
 </script>
 
 </body>
 </html>
+
+
+
+
+  
