@@ -9,11 +9,13 @@
 <meta name="apple-mobile-web-app-title" content="Sawasew Amharic Keyboard">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
 }
 </script>
+
 <style>
   body {
     font-family: system-ui, sans-serif;
@@ -22,279 +24,70 @@ if ('serviceWorker' in navigator) {
     background: #ffffff;
     color: #000;
   }
-  body.dark {
-    background: #111;
-    color: #eee;
-  }
+  body.dark { background: #111; color: #eee; }
   textarea {
-    width: 100%;
-    font-size: 24px;
-    padding: 10px;
-    height: 100px;
-    margin-bottom: 12px;
-    box-sizing: border-box;
+    width: 100%; font-size: 24px; padding: 10px; height: 100px; margin-bottom: 12px;
   }
   .keyboard { margin-top: 12px; }
   .row { display: flex; justify-content: center; }
   .key {
-    padding: 14px 18px;
-    margin: 3px;
-    background: #f2f2f2;
-    border: 1px solid #bbb;
-    border-radius: 6px;
-    font-size: 20px;
-    cursor: pointer;
-    user-select: none;
+    padding: 14px 18px; margin: 3px; background: #f2f2f2;
+    border: 1px solid #bbb; border-radius: 6px; font-size: 20px;
+    cursor: pointer; user-select: none;
   }
-  body.dark .key {
-    background: #333;
-    border-color: #555;
-    color: #eee;
-  }
-  .key:hover { filter: brightness(0.9); }
-  .popup {
-    position: absolute;
-    background: white;
-    border: 1px solid #aaa;
-    padding: 6px;
-    border-radius: 6px;
-    display: flex;
-    gap: 6px;
-    z-index: 20;
-  }
-  body.dark .popup {
-    background: #222;
-    border-color: #555;
-    color: #eee;
-  }
-  #suggestions li, #predictions li {
-    display: inline-block;
-    padding: 6px 12px;
-    margin: 4px;
-    background: #f4f4f4;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 22px;
-  }
-  body.dark #suggestions li {
-    background: #333;
-    border-color: #555;
-    color: #eee;
+  body.dark .key { background: #333; border-color: #555; color: #eee; }
+  #suggestions li {
+    display: inline-block; padding: 6px 12px; margin: 4px;
+    background: #f4f4f4; border: 1px solid #ccc; border-radius: 6px;
+    cursor: pointer; font-size: 22px;
   }
   #predictions li {
-    background: #dff4ff;
-    border-color: #9ecfff;
+    display: inline-block; padding: 6px 12px; margin: 4px;
+    background: #dff4ff; border: 1px solid #9ecfff; border-radius: 6px;
+    cursor: pointer; font-size: 22px;
   }
-  body.dark #predictions li {
-    background: #224455;
-    border-color: #4a7a99;
-    color: #eef;
-  }
-  #loading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 10px 0;
-  }
+  #loading { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
   #spinner {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 3px solid #ccc;
-    border-top-color: #007bff;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 3px solid #ccc; border-top-color: #007bff;
     animation: spin 0.8s linear infinite;
   }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  #app {
-    display: none;
-  }
+  @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+  #app { display: none; }
 </style>
 </head>
+
 <body class="light">
 <h1>Sawasew Amharic Keyboard – PWA Demo</h1>
+
 <div id="loading">
   <div id="spinner"></div>
   <div>Loading Amharic dictionary…</div>
 </div>
+
 <div id="app">
-  <p>
-    Type in English or use the on-screen keyboard. Suggestions and predictions are based
-    on embedded Bible data (Psalm 119 + Genesis 1). Works offline after first load.
-  </p>
+  <p>Type in English or click the keyboard. Suggestions and advanced prefix–suffix forms shown below.</p>
   <button onclick="toggleTheme()">Toggle Theme</button>
+
   <textarea id="text" placeholder="Type here or click the keyboard..."></textarea>
+
   <h3>Suggestions:</h3>
   <ul id="suggestions"></ul>
+
   <h3>Predictions:</h3>
   <ul id="predictions"></ul>
+
   <div id="keyboard" class="keyboard"></div>
 </div>
+
 <script>
+/* ===================================================================
+    LOAD DICTIONARIES
+=================================================================== */
 let DICT = [];
 let NEXT = {};
 
-const MAP = {
-  "tse": "ጸ", "tsi": "ጺ", "tso": "ጾ",
-  "ts": "ጽ", "sh": "ሸ", "ch": "ቸ", "gn": "ኝ",
-  "h": "ሀ", "l": "ለ", "m": "መ", "s": "ሰ", "z": "ዘ",
-  "t": "ተ", "n": "ነ", "k": "ከ", "w": "ወ", "b": "በ",
-  "f": "ፈ", "p": "ፐ", "g": "ገ", "d": "ደ", "j": "ጀ",
-  "r": "ረ", "q": "ቀ", "y": "የ", "x": "ሸ", "c": "ቸ",
-  "a": "አ", "e": "እ", "i": "ኢ", "u": "ኡ", "o": "ኦ"
-};
-
-const FIDEL = {
-  "b": ["በ","ቡ","ቢ","ባ","ቤ","ብ","ቦ"],
-  "s": ["ሰ","ሱ","ሲ","ሳ","ሴ","ስ","ሶ"],
-  "t": ["ተ","ቱ","ቲ","ታ","ቴ","ት","ቶ"],
-  "n": ["ነ","ኑ","ኒ","ና","ኔ","ን","ኖ"],
-  "k": ["ከ","ኩ","ኪ","ካ","ኬ","ክ","ኮ"],
-  "g": ["ገ","ጉ","ጊ","ጋ","ጌ","ግ","ጎ"],
-  "m": ["መ","ሙ","ሚ","ማ","ሜ","ም","ሞ"],
-  "d": ["ደ","ዱ","ዲ","ዳ","ዴ","ድ","ዶ"],
-  "r": ["ረ","ሩ","ሪ","ራ","ሬ","ር","ሮ"],
-  "f": ["ፈ","ፉ","ፊ","ፋ","ፌ","ፍ","ፎ"]
-};
-
-function phoneticToAmharic(text){
-  text = text.toLowerCase();
-  let out = "", i = 0;
-  const keys = Object.keys(MAP).sort((a,b)=>b.length - a.length);
-  while(i < text.length){
-    let matched = false;
-    for(const k of keys){
-      if(text.startsWith(k, i)){
-        out += MAP[k];
-        i += k.length;
-        matched = true;
-        break;
-      }
-    }
-    if(!matched){
-      if(text[i] === " ") out += " ";
-      i++;
-    }
-  }
-  return out;
-}
-
-function getSuggestions(prefix){
-  if(!prefix || !Array.isArray(DICT) || DICT.length === 0) return [];
-  return DICT
-    .filter(e => e.root && e.root.startsWith(prefix))
-    .sort((a,b)=> (b.freq||0) - (a.freq||0))
-    .slice(0, 8)
-    .map(e => e.root);
-}
-
-function predictNext(word){
-  if(!word || !NEXT || !NEXT[word]) return [];
-  return NEXT[word].slice(0, 5).map(p => p[0]);
-}
-
-function updateUI(){
-  const box = document.getElementById("text");
-  if(!box) return;
-  const text = box.value;
-  const lastLatin = text.trim().split(/\s+/).pop();
-  const prefix = phoneticToAmharic(lastLatin || "");
-  const sugg = getSuggestions(prefix);
-  const suggEl = document.getElementById("suggestions");
-  const predEl = document.getElementById("predictions");
-  if(!suggEl || !predEl) return;
-  suggEl.innerHTML = sugg.map(w => `<li onclick="applySuggestion('${w}')">${w}</li>`).join("");
-  predEl.innerHTML = "";
-}
-
-function applySuggestion(word){
-  const box = document.getElementById("text");
-  let parts = box.value.trim().split(/\s+/);
-  parts.pop();
-  parts.push(word);
-  box.value = parts.join(" ") + " ";
-  const preds = predictNext(word);
-  const predEl = document.getElementById("predictions");
-  predEl.innerHTML = preds.map(w => `<li onclick="insertPred('${w}')">${w}</li>`).join("");
-}
-
-function insertPred(word){
-  const box = document.getElementById("text");
-  box.value += word + " ";
-  updateUI();
-}
-
-const rows = [
-  ["q","w","e","r","t","y","u","i","o","p"],
-  ["a","s","d","f","g","h","j","k","l"],
-  ["z","x","c","v","b","n","m","⌫","␣"]
-];
-
-function buildKeyboard(){
-  const keyboard = document.getElementById("keyboard");
-  if(!keyboard) return;
-  keyboard.innerHTML = "";
-  rows.forEach(row => {
-    const rowDiv = document.createElement("div");
-    rowDiv.className = "row";
-    row.forEach(k => {
-      const key = document.createElement("div");
-      key.className = "key";
-      key.textContent = k;
-      key.onclick = () => handleKey(k);
-      key.oncontextmenu = e => {
-        e.preventDefault();
-        showPopup(k, e);
-      };
-      rowDiv.appendChild(key);
-    });
-    keyboard.appendChild(rowDiv);
-  });
-}
-
-function handleKey(k){
-  const box = document.getElementById("text");
-  if(k === "⌫"){
-    box.value = box.value.slice(0, -1);
-  } else if(k === "␣"){
-    box.value += " ";
-  } else {
-    box.value += k;
-  }
-  updateUI();
-}
-
-function showPopup(k, e){
-  if(!FIDEL[k]) return;
-  const popup = document.createElement("div");
-  popup.className = "popup";
-  FIDEL[k].forEach(ch => {
-    const span = document.createElement("span");
-    span.textContent = ch;
-    span.onclick = () => {
-      const box = document.getElementById("text");
-      box.value += ch;
-      popup.remove();
-      updateUI();
-    };
-    popup.appendChild(span);
-  });
-  popup.style.left = e.pageX + "px";
-  popup.style.top = e.pageY + "px";
-  document.body.appendChild(popup);
-  setTimeout(() => {
-    window.addEventListener("click", () => popup.remove(), {once:true});
-  }, 20);
-}
-
-function toggleTheme(){
-  document.body.classList.toggle("dark");
-}
-
-async function loadData(){
+async function loadData() {
   try {
     const [dictRes, nextRes] = await Promise.all([
       fetch("mobile_dict.json"),
@@ -303,7 +96,7 @@ async function loadData(){
     DICT = await dictRes.json();
     NEXT = await nextRes.json();
   } catch (e) {
-    console.error("Error loading JSON data", e);
+    console.error("Error loading dictionary files:", e);
   } finally {
     document.getElementById("loading").style.display = "none";
     document.getElementById("app").style.display = "block";
@@ -312,7 +105,173 @@ async function loadData(){
   }
 }
 
+/* ===================================================================
+    PHONETIC MAP (same as before)
+=================================================================== */
+const MAP = {
+  "tse":"ጸ","tsi":"ጺ","tso":"ጾ","ts":"ጽ","sh":"ሸ","ch":"ቸ","gn":"ኝ",
+  "h":"ሀ","l":"ለ","m":"መ","s":"ሰ","z":"ዘ","t":"ተ","n":"ነ","k":"ከ","w":"ወ",
+  "b":"በ","f":"ፈ","p":"ፐ","g":"ገ","d":"ደ","j":"ጀ","r":"ረ","q":"ቀ","y":"የ",
+  "x":"ሸ","c":"ቸ","a":"አ","e":"እ","i":"ኢ","u":"ኡ","o":"ኦ"
+};
+
+function phoneticToAmharic(text) {
+  text = text.toLowerCase();
+  let out = "", i = 0;
+  const keys = Object.keys(MAP).sort((a,b)=>b.length - a.length);
+  while (i < text.length) {
+    let matched = false;
+    for (const k of keys) {
+      if (text.startsWith(k, i)) {
+        out += MAP[k];
+        i += k.length;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      if (text[i] === " ") out += " ";
+      i++;
+    }
+  }
+  return out;
+}
+
+/* ===================================================================
+    NEW SECTION: PREFIXES + SUFFIXES + MORPHOLOGY ENGINE
+=================================================================== */
+const PREFIXES = ["በ","ለ","የ","ከ","ብ","ስ"];
+
+const SUFFIXES = [
+  "ን","ም","ህ","ዎች","ዎቹ","ዎችን","ዎችም","ዬ","ዎቹም","ዎቹሃም"
+];
+
+function applySuffix(root, suffix) {
+  if (root.endsWith("ን") && suffix.startsWith("ዎ")) {
+    const stem = root.slice(0, -1);
+    if (suffix === "ዎች")   return stem + "ኖች";
+    if (suffix === "ዎቹ")   return stem + "ኖቹ";
+    if (suffix === "ዎችን")  return stem + "ኖችን";
+    if (suffix === "ዎችም")  return stem + "ኖችም";
+    if (suffix === "ዎቹም")  return stem + "ኖቹም";
+    if (suffix === "ዎቹሃም")return stem + "ኖቹሃም";
+  }
+  return root + suffix;
+}
+
+function expandMorphology(root) {
+  const out = new Set();
+  out.add(root);
+
+  PREFIXES.forEach(p => out.add(p + root));
+  SUFFIXES.forEach(s => out.add(applySuffix(root, s)));
+
+  PREFIXES.forEach(p => {
+    SUFFIXES.forEach(s => out.add(p + applySuffix(root, s)));
+  });
+
+  return Array.from(out);
+}
+
+/* ===================================================================
+    UPDATED SUGGESTION ENGINE WITH MORPHOLOGY
+=================================================================== */
+function getSuggestions(prefix) {
+  if (!prefix || DICT.length === 0) return [];
+
+  const baseRoots = DICT
+    .filter(e => e.root && e.root.startsWith(prefix))
+    .sort((a,b)=> (b.freq||0) - (a.freq||0))
+    .slice(0, 5);
+
+  const expanded = new Set();
+
+  baseRoots.forEach(entry => {
+    expandMorphology(entry.root).forEach(v => expanded.add(v));
+  });
+
+  return Array.from(expanded).slice(0, 20);
+}
+
+/* ===================================================================
+    NEXT-WORD PREDICTION
+=================================================================== */
+function predictNext(word) {
+  if (!word || !NEXT[word]) return [];
+  return NEXT[word].slice(0, 5).map(w => w[0]);
+}
+
+/* ===================================================================
+    UI UPDATE
+=================================================================== */
+function updateUI() {
+  const box = document.getElementById("text");
+  const raw = box.value.trim().split(/\s+/).pop() || "";
+  const am = phoneticToAmharic(raw);
+
+  const sug = getSuggestions(am);
+  document.getElementById("suggestions").innerHTML =
+    sug.map(w => `<li onclick="applySuggestion('${w}')">${w}</li>`).join("");
+}
+
+function applySuggestion(word) {
+  const box = document.getElementById("text");
+  let parts = box.value.trim().split(/\s+/);
+  parts.pop();
+  parts.push(word);
+  box.value = parts.join(" ") + " ";
+
+  const pred = predictNext(word);
+  document.getElementById("predictions").innerHTML =
+    pred.map(w => `<li onclick="insertPred('${w}')">${w}</li>`).join("");
+}
+
+function insertPred(word) {
+  const box = document.getElementById("text");
+  box.value += word + " ";
+  updateUI();
+}
+
+/* ===================================================================
+    KEYBOARD
+=================================================================== */
+const rows = [
+  ["q","w","e","r","t","y","u","i","o","p"],
+  ["a","s","d","f","g","h","j","k","l"],
+  ["z","x","c","v","b","n","m","⌫","␣"]
+];
+
+function buildKeyboard() {
+  const kb = document.getElementById("keyboard");
+  kb.innerHTML = "";
+  rows.forEach(row => {
+    const div = document.createElement("div");
+    div.className = "row";
+    row.forEach(k => {
+      const key = document.createElement("div");
+      key.className = "key";
+      key.textContent = k;
+      key.onclick = () => handleKey(k);
+      div.appendChild(key);
+    });
+    kb.appendChild(div);
+  });
+}
+
+function handleKey(k) {
+  const box = document.getElementById("text");
+  if (k === "⌫") box.value = box.value.slice(0, -1);
+  else if (k === "␣") box.value += " ";
+  else box.value += k;
+  updateUI();
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+}
+
 loadData();
 </script>
+
 </body>
 </html>
